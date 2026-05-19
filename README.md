@@ -20,21 +20,19 @@ jobs.
     reference notation.
 - Per-panel title `Class N: P.PP %` showing `rlnClassDistribution`.
 - Live contrast / tone-map text fields:
-  - **`sigma_contrast`**: clip display to `mean ± σ·std`, matching
-    `relion_display`'s `getImageContrast` exactly. `0` = raw min/max.
-  - **`percentile`**: clip to `[P, 100-P]` percentile — robust alternative
-    for noisy slices. Mutually exclusive with `sigma_contrast`; setting one
-    auto-clears the other (active mode shown next to the fields).
+  - **`percentile`**: clip display range to `[P, 100-P]` percentile (robust
+    to outliers). Default `2`. Higher `P` = more aggressive clipping = more
+    saturation. `0` disables clipping (raw min/max).
   - **`softness`**: optional S-curve tone map on the display LUT (`0` =
     linear, `0.3–1.0` = gentle midtone expansion with softened highlights
-    and shadows). Independent from the clipping mode.
+    and shadows). Independent from the percentile clip.
 - **Sort button** cycling **orig → high→low → low→high**. Sort policy
   re-applies on every iteration as you scrub, so the panels always show the
   current iteration's top classes.
 - Iteration slider, plus **←/→** arrow-key navigation.
 - **Save PNG** button (snapshots the panel grid + controls).
-- Preload at startup with a `tqdm` progress bar; per-slice mean/std/min/max
-  are precomputed so sigma-mode contrast updates are constant-time.
+- Preload at startup with a `tqdm` progress bar; per-slice min/max are
+  precomputed so the no-clipping mode is constant-time per redraw.
 - **Block-mean + nearest-neighbor resize** at load time so every iteration's
   panel ends up at the same pixel grid. The target size is computed from the
   *last* iteration's image size divided by `--downsample F` (default 3×).
@@ -129,20 +127,18 @@ Class2D job, 50 classes in a 5×10 grid:
 python relion_class_viewer.py /path/to/Class2D/job001 --rows 5 --cols 10
 ```
 
-Once the window is up, tweak `sigma_contrast` (e.g. type `2.0`) or use
-percentile mode (type `1` in the `percentile` field) to taste.
+Once the window is up, tweak `percentile` (e.g. type `1` or `3`) and
+optionally `softness` (e.g. `0.5`) to taste.
 
 ## Options
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--rows R --cols C` | required | Grid layout. If `R*C < n_classes`, the first `R*C` are shown. With sort active, this is the top-`R*C` by distribution. |
-| `--sigma-contrast S` | `3.0` | Display range = `mean ± S·std`. `0` = raw min/max. Same as `relion_display --sigma_contrast`. Setting **percentile** > 0 clears sigma (and vice-versa) — only one mode is active at a time. |
-| `--percentile P` | `0` | Display range = `[P, 100-P]` percentile. Robust to outliers. Higher `P` clips more aggressively (more saturation). |
-| `--softness K` | `0` | **Display-only S-curve tone map** applied via the LUT. `0` = linear (matches `relion_display`). `0.3–1.0` = gentle midtone expansion with softened highlights and shadows. Adjustable live in the GUI. Does not alter the underlying image data. |
+| `--percentile P` | `2` | Display range = `[P, 100-P]` percentile. Robust to outliers. Higher `P` clips more aggressively (more saturation). `0` = raw min/max. |
+| `--softness K` | `0` | **Display-only S-curve tone map** applied via the LUT. `0` = linear. `0.3–1.0` = gentle midtone expansion with softened highlights and shadows. Adjustable live in the GUI. Does not alter the underlying image data. |
 | `--downsample F` | `3` | Integer downsample factor. `1` = no downsampling, `2` = half, `3` = third. Target panel size = `(last_iteration_image_size / F)`; every iteration is resized to that size so panels stay on a consistent pixel grid even when RELION extends resolution across iterations. |
 | `--no-preload` | off | Skip up-front loading; slices load lazily on first view. |
-| `--opengl` | off | **Leave off.** Switches pyqtgraph's viewport to `QOpenGLWidget`. Does not accelerate `ImageItem` rendering, and frequently produces `QPainter not active` errors over X11 forwarding (indirect GLX). |
 
 ## How class images are located
 
@@ -157,24 +153,23 @@ The reference path is resolved against (in order):
 
 Paths written by RELION are project-root-relative, so #2 normally hits.
 
-## Display semantics — matches `relion_display`
+## Display semantics
 
 - **Central Z slice for 3D:** `vol[nz//2, :, :]` — same as
   `img.getSlice(ZSIZE(img)/2, slice)` in `relion/src/displayer.cpp`.
 - **2D stack indexing:** `idx@path.mrcs` → `stack[idx-1, :, :]`.
-- **Contrast (sigma_contrast):** identical to
-  `relion/src/image.cpp::getImageContrast`. If `sigma > 0`, clip to
-  `mean ± sigma·std`; else clip to raw min/max. Result is visually identical
-  (matplotlib clipped pixel values; pyqtgraph saturates via `levels=`).
+- **Contrast:** percentile-based clipping (`[P, 100-P]`). Cryo-EM class
+  slices have heavy positive tails; percentile is robust to those outliers
+  in a way RELION's `mean ± σ·std` mode is not.
 - **Class %:** `rlnClassDistribution × 100`, shown in each panel title.
 
 ## Performance notes
 
 - All redraws push image data through Qt's `QPainter` raster path. The
   framerate ceiling is mainly the X11 forwarding link.
-- `sigma_contrast` mode is constant-time per panel (cached stats).
-  `percentile` mode still calls `np.percentile` on every redraw — stick
-  with sigma for max FPS on big grids.
+- `percentile` mode calls `np.percentile` on every redraw. On the default
+  256² panels it's ~1-2 ms per panel, so 50 panels ≈ 50-100 ms per slider
+  tick. Setting `percentile` to `0` (raw min/max) skips this entirely.
 - Increase `--downsample` for faster redraws: `4` is roughly 2× faster than
   the default `3`, `5` is ~3× faster, with progressively visible-but-
   tolerable quality loss. For a 720² source, factor 3 → 240², factor 5 →

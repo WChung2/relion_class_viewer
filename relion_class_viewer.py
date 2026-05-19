@@ -12,12 +12,6 @@ GUI is Qt (PyQt6) + pyqtgraph. The raster QPainter renderer underneath is
 much faster than a matplotlib equivalent for repeated image updates, which
 is what slider scrubbing on a 50-panel grid does.
 
-Note: there is a --opengl flag but it's largely cosmetic. pyqtgraph's
-useOpenGL=True only accelerates line plots, NOT ImageItem (what we use). It
-also breaks frequently over X11 forwarding due to indirect-GLX limitations
-(cascade of "QPainter not active" errors). Leave it off unless you know
-why you need it.
-
 Usage:
     # From inside the cloned repo:
     python relion_class_viewer.py /path/to/Class3D/job020 --rows 2 --cols 4
@@ -198,23 +192,19 @@ def load_class_image(ref: str, job_dir: Path) -> np.ndarray:
         raise ValueError(f"{mrc_path}: unexpected ndim={data.ndim}")
 
 
-def contrast_range(s: SliceData, sigma: float, percentile: float) -> tuple[float, float]:
+def contrast_range(s: SliceData, percentile: float) -> tuple[float, float]:
     """Compute display vmin/vmax for one slice.
 
-    Modes (checked in order):
-      - percentile > 0: clip at [P, 100-P] percentile -- robust to outliers.
-                        Only mode that still touches the pixels at redraw time
-                        (np.percentile needs to sort), so this is the slowest.
-      - sigma > 0     : mean +/- sigma*std (matches relion_display
-                        getImageContrast exactly). Uses cached mean/std.
-      - otherwise     : raw min/max (matches relion_display sigma_contrast=0).
-                        Uses cached min/max.
+    Two modes:
+      - percentile > 0: clip at [P, 100-P] percentile (robust to outliers).
+      - percentile == 0: raw min/max (uses cached min/max from SliceData).
+
+    The mean ± sigma·std mode that relion_display offers was tried here and
+    removed; on cryo-EM class slices percentile gives more useful contrast.
     """
     if percentile > 0:
         lo, hi = np.percentile(s.img, [percentile, 100.0 - percentile])
         return float(lo), float(hi)
-    if sigma > 0:
-        return s.mean - sigma * s.std, s.mean + sigma * s.std
     return s.min, s.max
 
 
@@ -300,7 +290,6 @@ class ClassViewer(QtWidgets.QMainWindow):
         job_dir: Path,
         rows: int,
         cols: int,
-        sigma: float,
         percentile: float,
         downsample: int,
         softness: float,
@@ -333,7 +322,6 @@ class ClassViewer(QtWidgets.QMainWindow):
         # distributions on every redraw, so as you scrub the slider the panels
         # automatically re-rank to stay sorted within that iteration.
         self.state = {
-            "sigma": float(sigma),
             "pct": float(percentile),
             "softness": max(0.0, float(softness)),
             "sort_mode": "orig",
@@ -458,35 +446,22 @@ class ClassViewer(QtWidgets.QMainWindow):
                 self.plot_items.append(plot)
                 self.image_items.append(img)
 
-        # Control row: sigma, percentile, sort, save.
+        # Control row: percentile, softness, sort, save.
         ctrls = QtWidgets.QWidget()
         h = QtWidgets.QHBoxLayout(ctrls)
         h.setContentsMargins(0, 0, 0, 0)
-        h.addWidget(QtWidgets.QLabel("sigma_contrast"))
-        self.sigma_edit = QtWidgets.QLineEdit(f"{self.state['sigma']:g}")
-        self.sigma_edit.setFixedWidth(70)
-        self.sigma_edit.setValidator(QtGui.QDoubleValidator(0.0, 1e9, 4))
-        self.sigma_edit.setToolTip(
-            "Clip display to mean ± σ·std (matches relion_display).\n"
-            "0 (or empty) disables. Setting this clears 'percentile' \n"
-            "since only one mode is active at a time."
-        )
-        # editingFinished fires on Enter or focus-loss; returnPressed is a
-        # backup so Enter always works even if focus tracking misbehaves.
-        self.sigma_edit.editingFinished.connect(self._on_sigma)
-        self.sigma_edit.returnPressed.connect(self._on_sigma)
-        h.addWidget(self.sigma_edit)
-
-        h.addSpacing(12)
         h.addWidget(QtWidgets.QLabel("percentile"))
         self.pct_edit = QtWidgets.QLineEdit(f"{self.state['pct']:g}")
         self.pct_edit.setFixedWidth(70)
         self.pct_edit.setValidator(QtGui.QDoubleValidator(0.0, 49.999, 4))
         self.pct_edit.setToolTip(
             "Clip display to [P, 100-P] percentile (robust to outliers).\n"
-            "0 (or empty) disables. Setting this clears 'sigma_contrast'.\n"
-            "Higher P = more aggressive clipping = more saturation."
+            "0 (or empty) = raw min/max (no clipping).\n"
+            "Higher P = more aggressive clipping = more saturation.\n"
+            "Useful range: 0.5 - 5 for cryo-EM class slices."
         )
+        # editingFinished fires on Enter or focus-loss; returnPressed is a
+        # backup so Enter always works even if focus tracking misbehaves.
         self.pct_edit.editingFinished.connect(self._on_pct)
         self.pct_edit.returnPressed.connect(self._on_pct)
         h.addWidget(self.pct_edit)
@@ -586,7 +561,7 @@ class ClassViewer(QtWidgets.QMainWindow):
                 continue
             self.plot_items[k].show()
             s = self._get_slice(it_idx, actual)
-            vmin, vmax = contrast_range(s, self.state["sigma"], self.state["pct"])
+            vmin, vmax = contrast_range(s, self.state["pct"])
             self.image_items[k].setImage(s.img, autoLevels=False, levels=(vmin, vmax))
             _, dist = rows[actual]
             # Monospace + padded fields keep the title's pixel width constant
@@ -613,24 +588,6 @@ class ClassViewer(QtWidgets.QMainWindow):
     def _on_slider(self, _v: int) -> None:
         self._redraw_current()
 
-    def _on_sigma(self) -> None:
-        txt = self.sigma_edit.text().strip()
-        try:
-            v = 0.0 if txt == "" else float(txt)
-        except ValueError:
-            return
-        if v < 0:
-            return
-        self.state["sigma"] = v
-        # Make modes mutually exclusive so it's obvious which is active.
-        if v > 0 and self.state["pct"] > 0:
-            self.state["pct"] = 0.0
-            self.pct_edit.blockSignals(True)
-            self.pct_edit.setText("0")
-            self.pct_edit.blockSignals(False)
-        self._refresh_mode_label()
-        self._redraw_current()
-
     def _on_pct(self) -> None:
         txt = self.pct_edit.text().strip()
         try:
@@ -640,11 +597,6 @@ class ClassViewer(QtWidgets.QMainWindow):
         if v < 0 or v >= 50:
             return
         self.state["pct"] = v
-        if v > 0 and self.state["sigma"] > 0:
-            self.state["sigma"] = 0.0
-            self.sigma_edit.blockSignals(True)
-            self.sigma_edit.setText("0")
-            self.sigma_edit.blockSignals(False)
         self._refresh_mode_label()
         self._redraw_current()
 
@@ -667,8 +619,6 @@ class ClassViewer(QtWidgets.QMainWindow):
     def _refresh_mode_label(self) -> None:
         if self.state["pct"] > 0:
             clip = f"active: percentile = {self.state['pct']:g} (clip [{self.state['pct']:g}, {100-self.state['pct']:g}])"
-        elif self.state["sigma"] > 0:
-            clip = f"active: sigma_contrast = {self.state['sigma']:g} (clip mean ± {self.state['sigma']:g}·std)"
         else:
             clip = "active: raw min/max"
         if self.state["softness"] > 0:
@@ -708,10 +658,10 @@ def main() -> int:
     ap.add_argument("job_dir", type=Path, help="Path to RELION Class2D/3D jobXXX/ directory")
     ap.add_argument("--rows", type=int, required=True)
     ap.add_argument("--cols", type=int, required=True)
-    ap.add_argument("--sigma-contrast", type=float, default=3.0,
-                    help="mean +/- sigma*std clipping (relion_display semantics; 0 = raw min/max).")
-    ap.add_argument("--percentile", type=float, default=0.0,
-                    help="Clip at [P, 100-P] percentile. 0 = off. Overrides sigma when > 0.")
+    ap.add_argument("--percentile", type=float, default=2.0,
+                    help="Display range = [P, 100-P] percentile clipping. Robust to outliers. "
+                         "0 = no clipping (raw min/max). Higher = more saturation. "
+                         "Typical useful range 0.5 - 5 for cryo-EM class slices.")
     ap.add_argument("--downsample", type=int, default=3,
                     help="Integer downsample factor (1, 2, 3, ...). 1 = no downsampling, "
                          "3 = each dim shrinks by 3x (e.g. 720->240). Target panel size is "
@@ -719,16 +669,11 @@ def main() -> int:
                          "lands on the same pixel grid even when RELION extends resolution "
                          "across iterations. Larger factor = faster redraws, less detail.")
     ap.add_argument("--softness", type=float, default=0.0,
-                    help="Optional S-curve tone map applied to the display LUT. 0 = linear "
-                         "(matches relion_display). 0.3-1.0 = gentle midtone expansion and "
-                         "softened highlights/shadows for less harsh saturation on cryo-EM "
-                         "class slices. Does NOT alter the underlying image data.")
+                    help="Optional S-curve tone map applied to the display LUT. 0 = linear. "
+                         "0.3-1.0 = gentle midtone expansion and softened highlights/shadows "
+                         "for less harsh saturation on cryo-EM class slices. Does NOT alter "
+                         "the underlying image data.")
     ap.add_argument("--no-preload", action="store_true")
-    ap.add_argument("--opengl", action="store_true",
-                    help="Switch pyqtgraph's GraphicsView viewport to QOpenGLWidget. "
-                         "Does NOT accelerate ImageItem (only line plots), and frequently "
-                         "produces 'QPainter not active' errors over X11 forwarding because "
-                         "indirect GLX cannot give Qt a usable GL context. Leave off.")
     args = ap.parse_args()
 
     job_dir = args.job_dir.resolve()
@@ -740,7 +685,6 @@ def main() -> int:
     pg.setConfigOptions(
         antialias=False,
         imageAxisOrder="row-major",
-        useOpenGL=args.opengl,
     )
 
     app = QtWidgets.QApplication(sys.argv)
@@ -748,7 +692,6 @@ def main() -> int:
         job_dir=job_dir,
         rows=args.rows,
         cols=args.cols,
-        sigma=args.sigma_contrast,
         percentile=args.percentile,
         downsample=args.downsample,
         softness=args.softness,
