@@ -46,6 +46,25 @@ jobs.
 
 **Requires Python 3.9+** (uses PEP 585 generic type hints like `list[…]`).
 
+### 1. Get the code
+
+```bash
+# HTTPS (no GitHub account needed to clone a public repo)
+git clone https://github.com/WChung2/relion_class_viewer.git
+cd relion_class_viewer
+```
+
+Or, if you have an SSH key registered with your GitHub account:
+
+```bash
+git clone git@github.com:WChung2/relion_class_viewer.git
+cd relion_class_viewer
+```
+
+To grab updates later: `git pull`.
+
+### 2. Install dependencies
+
 PyQt6 over X11 forwarding needs `libxcb-cursor.so.0` (Qt ≥ 6.5 requirement),
 which is missing on many Linux distros. The conda-forge path is the most
 reliable on a remote GPU server:
