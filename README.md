@@ -87,20 +87,33 @@ pip install -r requirements.txt
 Needs an X11 display. From your laptop:
 
 ```bash
-ssh -X user@<gpu-server>          # try -Y if -X seems blocked
-echo $DISPLAY                      # should print something like localhost:10.0
-xeyes                              # quick sanity check
+ssh -XY user@<gpu-server>          # X11 forwarding (-X untrusted + -Y trusted fallback)
+echo $DISPLAY                       # should print something like localhost:10.0
+xeyes                               # quick sanity check
 ```
 
 Important: **VS Code remote-SSH terminals do not forward X by default.** Use
 a plain `ssh -X` terminal, or set `ForwardX11 yes` in your laptop's
 `~/.ssh/config` for that host and restart the VS Code remote server.
 
-Then:
+Then invoke the script with `python` + the path to `relion_class_viewer.py`.
+Two common patterns:
 
 ```bash
+# Pattern A: cd into the cloned repo, then call by bare filename.
+cd ~/relion_class_viewer            # or wherever you cloned it
 python relion_class_viewer.py <job_dir> --rows R --cols C [options]
+
+# Pattern B: from anywhere, by absolute path.
+python ~/relion_class_viewer/relion_class_viewer.py <job_dir> --rows R --cols C [options]
 ```
+
+`<job_dir>` is the RELION job folder — usually an **absolute path** because
+RELION jobs almost never live in the same tree as this script. Tab-completion
+works in either pattern.
+
+If you're on Python 3.9+ the script runs immediately; older Pythons exit with
+a clear `requires Python 3.9 or newer` message instead of a stack trace.
 
 ### Examples
 

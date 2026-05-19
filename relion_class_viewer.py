@@ -19,15 +19,31 @@ also breaks frequently over X11 forwarding due to indirect-GLX limitations
 why you need it.
 
 Usage:
-    python relion_class_viewer.py Class3D/job020 --rows 2 --cols 4
-    python relion_class_viewer.py Class2D/job001 --rows 5 --cols 10
+    # From inside the cloned repo:
+    python relion_class_viewer.py /path/to/Class3D/job020 --rows 2 --cols 4
+    # Or by absolute path from anywhere:
+    python ~/relion_class_viewer/relion_class_viewer.py /path/to/Class2D/job001 --rows 5 --cols 10
+
+Requires Python 3.9+.
 """
 
 from __future__ import annotations
 
+# Python version guard. `from __future__ import annotations` must be the first
+# real statement after the docstring (language rule), so the check goes here.
+# It uses plain syntax so it parses cleanly on any Python 3.x and reports a
+# friendly error instead of an obscure TypeError further down on old versions.
+import sys
+
+if sys.version_info < (3, 9):
+    sys.stderr.write(
+        "relion_class_viewer requires Python 3.9 or newer "
+        "(you are running Python {0}.{1}).\n".format(*sys.version_info[:2])
+    )
+    sys.exit(1)
+
 import argparse
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
