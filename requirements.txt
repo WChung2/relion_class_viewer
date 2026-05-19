@@ -1,0 +1,5 @@
+numpy>=1.20
+mrcfile>=1.4
+tqdm>=4.0
+PyQt6>=6.5
+pyqtgraph>=0.13
