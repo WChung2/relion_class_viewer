@@ -141,11 +141,13 @@ Paths written by RELION are project-root-relative, so #2 normally hits.
 - `sigma_contrast` mode is constant-time per panel (cached stats).
   `percentile` mode still calls `np.percentile` on every redraw — stick
   with sigma for max FPS on big grids.
-- `--downsample 128` gives another ~4× redraw speedup on top of the default
-  with visible-but-tolerable quality loss.
-- If even `--downsample 128` is sluggish, your X11 link is the bottleneck —
-  try a remote-desktop alternative like NoMachine or TurboVNC instead of
-  raw `ssh -X`.
+- Increase `--downsample` for faster redraws: `4` is roughly 2× faster than
+  the default `3`, `5` is ~3× faster, with progressively visible-but-
+  tolerable quality loss. For a 720² source, factor 3 → 240², factor 5 →
+  144², factor 8 → 90².
+- If even `--downsample 6` feels sluggish, your X11 link is the bottleneck,
+  not the renderer — try a remote-desktop alternative like NoMachine or
+  TurboVNC instead of raw `ssh -X`.
 
 ## Files
 
