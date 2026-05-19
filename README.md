@@ -44,6 +44,8 @@ jobs.
 
 ## Installation
 
+**Requires Python 3.9+** (uses PEP 585 generic type hints like `list[…]`).
+
 PyQt6 over X11 forwarding needs `libxcb-cursor.so.0` (Qt ≥ 6.5 requirement),
 which is missing on many Linux distros. The conda-forge path is the most
 reliable on a remote GPU server:

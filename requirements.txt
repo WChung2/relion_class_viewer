@@ -1,3 +1,4 @@
+# Python 3.9+ (uses PEP 585 generic types: list[...], tuple[...], etc.)
 numpy>=1.20
 mrcfile>=1.4
 tqdm>=4.0
