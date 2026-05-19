@@ -47,15 +47,7 @@ jobs.
 ### 1. Get the code
 
 ```bash
-# HTTPS (no GitHub account needed to clone a public repo)
 git clone https://github.com/WChung2/relion_class_viewer.git
-cd relion_class_viewer
-```
-
-Or, if you have an SSH key registered with your GitHub account:
-
-```bash
-git clone git@github.com:WChung2/relion_class_viewer.git
 cd relion_class_viewer
 ```
 
