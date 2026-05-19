@@ -155,13 +155,18 @@ Paths written by RELION are project-root-relative, so #2 normally hits.
 
 ## Display semantics
 
-- **Central Z slice for 3D:** `vol[nz//2, :, :]` — same as
-  `img.getSlice(ZSIZE(img)/2, slice)` in `relion/src/displayer.cpp`.
-- **2D stack indexing:** `idx@path.mrcs` → `stack[idx-1, :, :]`.
-- **Contrast:** percentile-based clipping (`[P, 100-P]`). Cryo-EM class
-  slices have heavy positive tails; percentile is robust to those outliers
-  in a way RELION's `mean ± σ·std` mode is not.
-- **Class %:** `rlnClassDistribution × 100`, shown in each panel title.
+- **Slice taken from each Class3D volume:** `vol[nz//2, :, :]` (the central
+  Z slice) — same as `img.getSlice(ZSIZE(img)/2, slice)` in
+  `relion/src/displayer.cpp`.
+- **Class2D stack indexing:** the RELION `idx@path.mrcs` notation in
+  `_rlnReferenceImage` is mapped to `stack[idx-1, :, :]` (1-based RELION
+  index → 0-based NumPy slice).
+- **Contrast mapping:** display range is `[P, 100-P]` percentile of the
+  panel's pixel values (computed per panel, per redraw). `P = 0` falls back
+  to the raw `(min, max)` of the panel. The optional `--softness` tone map
+  is then applied as an S-curve on the resulting LUT.
+- **Class label:** each panel title shows the original class index and
+  `rlnClassDistribution × 100`.
 
 ## Performance notes
 
