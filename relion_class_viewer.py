@@ -658,7 +658,7 @@ def main() -> int:
     ap.add_argument("job_dir", type=Path, help="Path to RELION Class2D/3D jobXXX/ directory")
     ap.add_argument("--rows", type=int, required=True)
     ap.add_argument("--cols", type=int, required=True)
-    ap.add_argument("--percentile", type=float, default=2.0,
+    ap.add_argument("--percentile", type=float, default=0.0,
                     help="Display range = [P, 100-P] percentile clipping. Robust to outliers. "
                          "0 = no clipping (raw min/max). Higher = more saturation. "
                          "Typical useful range 0.5 - 5 for cryo-EM class slices.")

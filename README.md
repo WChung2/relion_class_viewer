@@ -21,8 +21,8 @@ jobs.
 - Per-panel title `Class N: P.PP %` showing `rlnClassDistribution`.
 - Live contrast / tone-map text fields:
   - **`percentile`**: clip display range to `[P, 100-P]` percentile (robust
-    to outliers). Default `2`. Higher `P` = more aggressive clipping = more
-    saturation. `0` disables clipping (raw min/max).
+    to outliers). Default `0` (raw min/max, no clipping). Higher `P` = more
+    aggressive clipping = more saturation.
   - **`softness`**: optional S-curve tone map on the display LUT (`0` =
     linear, `0.3–1.0` = gentle midtone expansion with softened highlights
     and shadows). Independent from the percentile clip.
@@ -47,13 +47,27 @@ jobs.
 ### 1. Get the code
 
 ```bash
-git clone https://github.com/WChung2/relion_class_viewer.git
+git clone https://github.com/LBEM-CH/relion_class_viewer.git
 cd relion_class_viewer
 ```
 
 To grab updates later: `git pull`.
 
-### 2. Install dependencies
+### 2. Create a dedicated conda environment
+
+Keeping the viewer isolated from other Python installs avoids PyQt / Qt
+version clashes (e.g. with napari, pyem, or a system RELION install). Pick
+any name you like — `relion_viewer` is used below.
+
+```bash
+conda create -n relion_viewer -c conda-forge python=3.11
+conda activate relion_viewer
+```
+
+You'll need to `conda activate relion_viewer` in every new shell before
+running the viewer.
+
+### 3. Install dependencies
 
 PyQt6 over X11 forwarding needs `libxcb-cursor.so.0` (Qt ≥ 6.5 requirement),
 which is missing on many Linux distros. The conda-forge path is the most
@@ -64,9 +78,9 @@ conda install -c conda-forge \
     numpy mrcfile tqdm pyqt pyqtgraph xcb-util-cursor
 ```
 
-If you'd rather use pip, you can — but on Linux you also need
-`libxcb-cursor0` from your distro (Debian/Ubuntu: `sudo apt install
-libxcb-cursor0`):
+If you'd rather use pip inside the same env, you can — but on Linux you
+also need `libxcb-cursor0` from your distro (Debian/Ubuntu: `sudo apt
+install libxcb-cursor0`):
 
 ```bash
 pip install -r requirements.txt
@@ -127,7 +141,7 @@ optionally `softness` (e.g. `0.5`) to taste.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--rows R --cols C` | required | Grid layout. If `R*C < n_classes`, the first `R*C` are shown. With sort active, this is the top-`R*C` by distribution. |
-| `--percentile P` | `2` | Display range = `[P, 100-P]` percentile. Robust to outliers. Higher `P` clips more aggressively (more saturation). `0` = raw min/max. |
+| `--percentile P` | `0` | Display range = `[P, 100-P]` percentile. `0` = raw min/max (no clipping). Higher `P` clips more aggressively (more saturation, robust to outliers). |
 | `--softness K` | `0` | **Display-only S-curve tone map** applied via the LUT. `0` = linear. `0.3–1.0` = gentle midtone expansion with softened highlights and shadows. Adjustable live in the GUI. Does not alter the underlying image data. |
 | `--downsample F` | `3` | Integer downsample factor. `1` = no downsampling, `2` = half, `3` = third. Target panel size = `(last_iteration_image_size / F)`; every iteration is resized to that size so panels stay on a consistent pixel grid even when RELION extends resolution across iterations. |
 | `--no-preload` | off | Skip up-front loading; slices load lazily on first view. |
