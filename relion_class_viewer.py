@@ -2,6 +2,8 @@
 """
 RELION 2D/3D Classification iteration viewer.
 
+author: Wen-Lu Chung
+
 Loads every run_itXXX_model.star in a Class2D or Class3D jobXXX/ directory
 and shows each class in a grid. For Class3D the central Z slice of each
 class volume is shown (matching relion_display). For Class2D the 2D class
